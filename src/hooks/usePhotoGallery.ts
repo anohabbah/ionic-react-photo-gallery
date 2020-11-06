@@ -52,10 +52,36 @@ export interface Photo {
     webviewPath: string;
 }
 
-async function savePicture(photo: CameraPhoto, filename: string): Promise<Photo> {
-    const base64Data = await base64FromPath(photo.webPath!);
+async function savePicture(photo: CameraPhoto, fileName: string): Promise<Photo> {
+    let base64Data: string;
+    // "hybrid" will detect Cordova or Capacitor;
+    if (isPlatform('hybrid')) {
+        const file = await readFile({
+            path: photo.path!
+        });
+        base64Data = file.data;
+    } else {
+        base64Data = await base64FromPath(photo.webPath!);
+    }
+    const savedFile = await writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: FilesystemDirectory.Data
+    });
 
-    const savedFile = await writeFile({path: filename, data: base64Data, directory: FilesystemDirectory.Data});
-
-    return { filepath: filename, webviewPath: photo.webPath!}
+    if (isPlatform('hybrid')) {
+        // Display the new image by rewriting the 'file://' path to HTTP
+        // Details: https://ionicframework.com/docs/building/webview#file-protocol
+        return {
+            filepath: savedFile.uri,
+            webviewPath: Capacitor.convertFileSrc(savedFile.uri),
+        };
+    } else {
+        // Use webPath to display the new image instead of base64 since it's
+        // already loaded into memory
+        return {
+            filepath: fileName,
+            webviewPath: photo.webPath!,
+        };
+    }
 }
